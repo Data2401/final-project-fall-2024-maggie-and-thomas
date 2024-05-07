@@ -1,0 +1,524 @@
+---
+title: "Final Project Report"
+author: "Maggie Ha-Thomas Duong"
+date: "2024-05-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## Introduction
+
+We are a group of two members including Maggie Ha and Thomas Duong. Our project is about obesity.
+
+The prevalence of obesity has emerged as a critical public health concern globally. Obesity is a metabolic disorder and also a predisposition for many other diseases including cardiovascular disease, stroke, diabetes, and even some types of cancers. Obesity is a multifaceted problem that results from the interaction of both social factors and biological factors. The goal of this project is to understand the relationship of obesity and daily calories intake as well as the impact of economic geography on the prevalence of obesity in the respective population by analyzing two datasets from Kaggle. The first dataset is about the obesity prevalence in countries and regions around the world. The second dataset is about the amount of daily calories intake per capita in the respective countries and regions.
+
+The analysis approach in the project is join two datasets by the geography names (both countries and regions). Then, we aim to have a closer look at the relationship between obesity and other factors. First, we will look at the correlation between obesity prevalence and daily calories intake. Secondly, we want to find out which sex (male or female) is more likely to have obesity and in which countries and/or regions. Lastly, we will try to understand the relationship between the prevalence of obesity in each region and its socioeconomic status. We would like to see if we can uncover new information in the data and compare it to the established findings in the healthcare community that obesity prevalence is shifting from the developed countries to the developing countries.
+
+
+At the end of the project, we hope we can have an insightful understanding of obesity globally and from there appropriate strategies could be developed to address obesity problem in each specific country and region.  
+
+
+## Packages Required
+
+
+```{r}
+# Load packages to be used
+library(tidyverse) ## Loaded for dplyr
+library(ggplot2) ## Loaded for plotting
+
+```
+
+
+##  Data Preparation
+
+
+```{r}
+# Read in data to be examined
+raw_data_1 <- read.csv(file = "Obese population.csv",stringsAsFactors = T)
+raw_data_2 <- read.csv(file = "Average calories.csv",stringsAsFactors = T)
+```
+This data is obtained from Kaggle (https://www.kaggle.com/datasets/nipasriwongsiridech/calories-data?resource=download&select=Obese+population.csv). It was collected by NIPASRI WONGSIRIDECH who compiled the data together as a personal interest project on March 28th 2024. The dataset was just uploaded on Kaggle less than one month ago. 
+
+To ensure the dataset was clean and ready to be used for analysis, it was first checked for any missing data which was then removed to form two new datasets.
+
+```{r}
+sum(is.na(raw_data_1)) # Returns the number of missing data values to determine that missing data exists
+obese_data <- na.omit(raw_data_1) # Remove the observations with missing data
+sum(is.na(raw_data_2)) # Returns the number of missing data values to determine that missing data exists
+calories_data <- na.omit(raw_data_2) # Remove the observations with missing data
+```
+
+Now that all of the missing data has been removed, the data can be manipulated to work it into a more easily usable form. 
+
+Now that the data has been prepared for our analysis, let’s take a quick look at it.
+
+```{r}
+glimpse(obese_data)
+glimpse(calories_data)
+```
+
+Next, we want to join these two datasets, but first we pivot longer these two datasets to have a column of year for each dataset. Then, we join them by geography and year.
+
+
+```{r}
+library(dplyr)
+
+obese_data <- obese_data %>% pivot_longer(cols=c('X2015', 'X2016', 'X2017', 'X2018', 'X2019', 'X2020', 'X2021', 'X2022', 'X2023'),
+                    names_to='year',
+                    values_to='obesity_percentage')
+
+calories_data <- calories_data %>% pivot_longer(cols=c('X2015', 'X2016', 'X2017', 'X2018', 'X2019', 'X2020', 'X2021', 'X2022', 'X2023'),
+                    names_to='year',
+                    values_to='calories_intake')
+
+
+df= obese_data %>% inner_join(calories_data, by = c("Geography" = "Geography", "year" = "year"))
+
+```
+
+
+Now, we have a look at the new dataframe using glimpse function.
+
+```{r}
+glimpse(df)
+df <- df %>% mutate(calories_intake = as.numeric(gsub(",","",calories_intake)))
+df <- df %>% mutate(year = gsub("X","", year))
+```
+
+
+## Exploratory Data Analysis
+
+### 1. Is there any relationship between the obesity prevalence and the daily calories intake? If yes, in what countries or regions? If no, in what countries or regions?
+
+In order to find if there is a relationship between obesity prevalence and the daily calories intake, we want to graph the obesity prevalence against the daily calories intake per capita.
+
+First, let's look at the relationship (if exists) in the whole world, in the developed countries, and in the developing countries.
+
+```{r fig.width=10}
+ggplot(data = df %>% filter(Geography %in% c("World","Emerging and Developing Countries", "Developed Countries")),
+       aes(x = calories_intake, y = obesity_percentage, color = Category.x, shape = Geography)) +
+  geom_point(size=3) +
+   scale_color_hue(labels = c("Female", "Male", "Average")) +
+  theme(legend.position = "bottom") +
+  ggtitle("Relationship between daily calories intake and obesity prevalence") +
+  xlab("Daily calories intake per capita") + ylab("Obesity prevalence")
+
+```
+
+There is a positive correlation between obesity prevalence and the daily calories intake everywhere in the world, in both males and females.
+
+People from the developed countries tends to eat more than people from the emerging and developing countries. 
+
+In the emerging and developing countries, females are more likely to have obesity than males if they eat the same amount of calories. It does not happen in the developed countries. Both males and females have the same chance to develop obesity if they eat the same amount of calories. 
+
+It could be concluded that there is difference in the sensitivity for obesity development between males and females at a lower amount of calories intake (less than 3,000 cal/day), and there is no difference in the sensitivity for obesity development between males and females at a higher amount of calories intake (more than 3,400-3,500 cal/day).
+
+
+### 2. Which countries or regions have the highest percentage population of obesity? Which countries or regions have the lowest percentage population of obesity?
+
+We want to look at the obese population in each year from 2015 to 2023. In each year, we want to look for the top 5 countries or regions with obesity prevalence and bottom 5 countries or regions with obesity prevalence.
+
+Here are the five countries with the highest percent of population of obesity and the five countries with the lowest percent of population of obesity in the world in 2015.
+
+```{r}
+df1 <- df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>%
+  filter(year =="2015") %>%
+  arrange(obesity_percentage)
+
+top <- df1 %>% slice_max(obesity_percentage, n = 5)
+bottom <- df1 %>% slice_min(obesity_percentage, n = 5)
+rbind(top,bottom) %>% arrange(obesity_percentage)
+```
+
+Here are the five countries with the highest percent of population of obesity and the five countries with the lowest percent of population of obesity in the world in 2016.
+
+```{r}
+df2 <- df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>%
+  filter(year =="2016") %>%
+  arrange(obesity_percentage)
+
+top <- df2 %>% slice_max(obesity_percentage, n = 5)
+bottom <- df2 %>% slice_min(obesity_percentage, n = 5)
+rbind(top,bottom) %>% arrange(obesity_percentage)
+```
+
+Here are the five countries with the highest percent of population of obesity and the five countries with the lowest percent of population of obesity in the world in 2017.
+
+```{r}
+df3 <- df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>%
+  filter(year =="2017") %>%
+  arrange(obesity_percentage)
+
+top <- df3 %>% slice_max(obesity_percentage, n = 5)
+bottom <- df3 %>% slice_min(obesity_percentage, n = 5)
+rbind(top,bottom) %>% arrange(obesity_percentage)
+```
+
+Here are the five countries with the highest percent of population of obesity and the five countries with the lowest percent of population of obesity in the world in 2018.
+
+```{r}
+df4 <- df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>%
+  filter(year =="2018") %>%
+  arrange(obesity_percentage)
+
+top <- df4 %>% slice_max(obesity_percentage, n = 5)
+bottom <- df4 %>% slice_min(obesity_percentage, n = 5)
+rbind(top,bottom) %>% arrange(obesity_percentage)
+```
+
+Here are the five countries with the highest percent of population of obesity and the five countries with the lowest percent of population of obesity in the world in 2019.
+
+```{r}
+df5 <- df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>%
+  filter(year =="2019") %>%
+  arrange(obesity_percentage)
+
+top <- df5 %>% slice_max(obesity_percentage, n = 5)
+bottom <- df5 %>% slice_min(obesity_percentage, n = 5)
+rbind(top,bottom) %>% arrange(obesity_percentage)
+```
+
+
+Here are the five countries with the highest percent of population of obesity and the five countries with the lowest percent of population of obesity in the world in 2020.
+
+```{r}
+df6 <- df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>%
+  filter(year =="2020") %>%
+  arrange(obesity_percentage)
+
+top <- df6 %>% slice_max(obesity_percentage, n = 5)
+bottom <- df6 %>% slice_min(obesity_percentage, n = 5)
+rbind(top,bottom) %>% arrange(obesity_percentage)
+```
+
+Here are the five countries with the highest percent of population of obesity and the five countries with the lowest percent of population of obesity in the world in 2021.
+
+```{r}
+df7 <- df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>%
+  filter(year =="2021") %>%
+  arrange(obesity_percentage)
+
+top <- df7 %>% slice_max(obesity_percentage, n = 5)
+bottom <- df7 %>% slice_min(obesity_percentage, n = 5)
+rbind(top,bottom) %>% arrange(obesity_percentage)
+```
+
+
+Here are the five countries with the highest percent of population of obesity and the five countries with the lowest percent of population of obesity in the world in 2022.
+
+```{r}
+df8 <- df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>%
+  filter(year =="2022") %>%
+  arrange(obesity_percentage)
+
+top <- df8 %>% slice_max(obesity_percentage, n = 5)
+bottom <- df8 %>% slice_min(obesity_percentage, n = 5)
+rbind(top,bottom) %>% arrange(obesity_percentage)
+```
+
+
+Here are the five countries with the highest percent of population of obesity and the five countries with the lowest percent of population of obesity in the world in 2023.
+
+```{r}
+df9 <- df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>%
+  filter(year =="2023") %>%
+  arrange(obesity_percentage)
+
+top <- df9 %>% slice_max(obesity_percentage, n = 5)
+bottom <- df9 %>% slice_min(obesity_percentage, n = 5)
+rbind(top,bottom) %>% arrange(obesity_percentage)
+```
+Over the years, the countries or regions with highest percentage of obesity population and the countries or regions with lowest percentage of obesity population tends to be the same.
+
+The most remarkable countries among the list are Samoa and Kiribati, which are two developing countries located in the midst of Pacific Ocean. In fact, they are island countries.
+
+While percentage of obesity population tends to be higher in the developed countries than in the developing countries, Samoa and Kiribati are not developed countries but have a high percentage of population with obesity.
+
+Let's look at a picture of a Samoa person.
+
+![The Rock](the rock.jpg){width=75%, height=75%}
+
+In fact, Samoan people are not obese. They are muscular and strong-built. We can see that BMI should not be used to indicate obesity in Samoan population because the their body mass is most likely from body muscle rather than from adipose tissue. 
+
+Let's look at the top 3 countries each year together.
+
+```{r}
+combined <- rbind(df1,df2,df3,df4,df5,df6,df7,df8,df9)
+
+# top 3 for each year
+df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>% 
+  group_by(year) %>% slice_max(obesity_percentage, n = 3)
+```
+
+USA is consistently in the list of the top 3 countries with the highest percentage of obesity population in the world over the years from 2015 to 2023. 
+
+And now, the bottom 3 countries each year together.
+
+```{r}
+# bottom 3 for each year
+df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>% 
+  group_by(year) %>% slice_min(obesity_percentage, n = 3)
+```
+
+Vietnam and Bangladesh are consistently in the list of the 3 countries with the lowest percentage of obesity population in the world over the years from 2015 to 2023. 
+
+
+### 3. Is obesity increasing over years all over the world?
+
+We create a line graph to show the trend of percentage of obesity population over the years from 2015 to 2023.
+
+```{r}
+# plotting percentages by country over year
+df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>% 
+  ggplot( aes(x = year, y = obesity_percentage, group = Geography)) + 
+  geom_line() +
+  ggtitle("Percentage of Obesity Population over Years") +
+  xlab("Year") + ylab("Obesity Prevalence")
+
+
+```
+
+Over the years from 2015 to 2023, the percentage of obesity population is increasing. We can see the same trend by graphing a boxplot.
+
+```{r fig.width=10}
+df %>%
+  ggplot(aes(x=year, y = obesity_percentage)) +
+  geom_boxplot(fill = 5) +
+  ggtitle("Boxplot of Obesity Percentage") +
+  xlab("Year") + ylab("Obesity Percentage")
+```
+
+The percentage of population of obesity is increasing in the world. 
+
+Now, we want to see if there is a different trend of obesity prevalence between developed countries and developing countries by creating a bar graph, in which we segregate developed countries and developing countries. 
+
+
+```{r fig.width=10}
+df <- df %>% mutate(year = gsub("X","", year))
+
+world_obe_year <- df %>% select(Geography, obesity_percentage, year) %>% 
+  filter (Geography == "World"|Geography == "Emerging and Developing Countries"|Geography == "Developed Countries")
+
+ggplot(world_obe_year, aes(x= year, y= obesity_percentage)) + 
+  geom_bar(stat="identity", fill="pink") +
+  facet_wrap(~Geography) +
+  theme_bw() +
+  ggtitle("Obesity Prevalence between Developed Countries and Developing Countries over Years") +
+  xlab("Year") + ylab("Obesity Prevalence")
+
+```
+
+The obesity prevalence is increasing in both developed countries and developing countries. However, the slope is higher in the developed countries than in the developing countries. It means that the obesity population in the developed countries is increasing more rapidly than in the developing countries.
+
+
+Now, we want to see if the world is eating more over the years from 2015 to 2023 by creating a line graph showing the trend of amount of calories intake everyday per person over the years.
+
+```{r}
+# plotting daily calories intake by country over year
+df %>% select(Geography, calories_intake, year, Category.x) %>%
+  filter(Category.x == "Obese Population (BMI 30kg/sq m or More)") %>% 
+  ggplot( aes(x = year, y = calories_intake, group = Geography)) + geom_line() +
+  ggtitle("Daily Calories Intake Per Capita over Years") +
+  xlab("Year") + ylab("Daily Calories Intake Per Capita")
+
+
+```
+
+Overall, we can see there is an increase in calories intake everyday per person in most of the countries or regions. In several countries or regions (some lines in the graph), there is no specific trend or there is a decrease in the amount of calories intake. It is not as consistent as the trend of the percentage of obesity population. Given that BMI is a reliable indicator of obesity, we are able to conclude that eating more is not the main reason that causes the development of obesity in some countries or regions. In fact, it is known that a sedentary lifestyle is a risk factor of obesity. There are also several other risk factors of obesity like genetic predisposition, underlying diseases or conditions, and stress.
+
+
+Let's look at the trend of calories intake over years through a boxplot.
+
+
+```{r fig.width=10}
+df %>%
+  ggplot(aes(x=year, y = calories_intake)) +
+  geom_boxplot(fill = 7) +
+  ggtitle("Boxplot of Daily Calories Intake Per Capita") +
+  xlab("Year") + ylab("Daily Calories Intake Per Capita")
+```
+
+Indeed, the whole world overall is eating more.
+
+Now, we want to see if there is a different trend of calories intake between developed countries and developing countries by creating a bar graph, in which we segregate developed countries and developing countries. 
+
+```{r fig.width=10}
+
+world_cal_year <- df %>% select(Geography, calories_intake, year) %>% 
+  filter (Geography == "World"|Geography == "Emerging and Developing Countries"|Geography ==  "Developed Countries")
+
+ggplot(world_cal_year, aes(x= year, y= calories_intake)) + 
+  geom_bar(stat="identity", fill=2) +
+  facet_wrap(~Geography) +
+  theme_bw() + 
+  ggtitle("Daily Calories Intake between Developed Countries and Developing Countries over Years") +
+  xlab("Year") + ylab("Daily Calories Intake Per Capita")
+```
+
+The calories intake is increasing in both developed countries and developing countries. 
+
+### 4. In the world, are male or female more likely to have obesity? In which countries or regions, male are more likely have obesity? In which countries or regions, female are more likely have obesity?
+
+We will create a boxplot of obesity prevalence in female, male, and in both female and male. 
+
+
+```{r fig.width=10}
+df %>%
+  ggplot(aes(x=Category.x, y =obesity_percentage)) +
+  geom_boxplot(fill = "pink") +
+  ggtitle("Boxplot of Obesity Prevalence") +
+  xlab("Female, Male, Both Female and Male") + ylab("Obesity Prevalence")
+```
+
+
+In the world, the prevalence of obesity in females are higher than the prevalence of obesity of males.
+
+We can create another type of graph, a line graph, to see the prevalence of obesity in female and male over years by segregating by sex.
+
+
+```{r fig.width=10}
+df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Geography == "World") %>%
+  ggplot(aes(x = year, y= obesity_percentage, group =Category.x)) +
+  geom_line(aes(color = Category.x)) +
+  geom_point(aes(color = Category.x)) +
+  theme(legend.position = "bottom") + 
+  ggtitle("Linegraph of Obesity Prevalence over Years") +
+  xlab("Years") + ylab("Obesity Prevalence")
+
+```
+In the whole world, there is a higher percentage of females who have obesity than males. 
+
+### 5. Is obesity more prevalent in the derdeveloping countries or in the developed countries? Are the countries in G7/G20 have percentage of population of obesity than the rest of the world?
+
+Now, we want to see the difference between females and males in the developed countries and in the developing countries. 
+
+```{r fig.width=10}
+df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Geography == "Developed Countries" | Geography == "Emerging and Developing Countries") %>%
+  ggplot(aes(x = year, y= obesity_percentage, group = Category.x)) +
+  geom_line(aes(color = Category.x))+
+  geom_point(aes(color = Category.x)) +
+  facet_wrap(~Geography) +
+  theme(legend.position = "bottom") +
+  ggtitle("Linegraph of Obesity Prevalence") +
+  xlab("Years") + ylab("Obesity Prevalence")
+
+```
+
+
+In general, the prevalence of obesity in the developed countries is greater than in the developing countries in both males and females. In both the developed countries and the emerging and developing countries, females are more likely to have obesity than males. However, the differences between the obesity prevalence of female and males in the developing countries are much larger than in the developed countries.
+
+We can have another graph to see the difference in obesity prevalence between the developed countries and developing countries. Now, we will graph a boxplot.
+
+```{r fig.width=15}
+df %>%
+  filter(Geography == "Developed Countries" | Geography == "Emerging and Developing Countries") %>%
+  filter(Category.x == "Female Obese population (BMI 30kg/sq m or More)" | Category.x == "Male Obese population (BMI 30kg/sq m or More)") %>%
+  ggplot(aes(x=Category.x, y =obesity_percentage)) +
+  geom_boxplot(fill = 7) +
+  facet_wrap(~Geography) +
+  ggtitle("Boxplot of Obesity Prevalence") +
+  xlab("Female, Male") + ylab("Obesity Prevalence")
+```
+
+In the boxplot, we can see again there is a clear discrepancy in the obesity prevalence between females and males in the developing countries. Also, the prevalence of obesity is much higher in the developed countries than in the developing countries in both females and males.
+
+
+Let's look at the biggest 5 economy in the world: USA, China, Japan, UK, and Germany.
+
+```{r fig.width=10}
+df %>% select(Geography, obesity_percentage, year, Category.x) %>%
+  filter(Geography == "USA"|Geography == "Japan"|Geography=="China"| Geography =="Germany"|Geography =="United Kingdom" ) %>%
+  ggplot(aes(x = year, y= obesity_percentage, group =Geography)) +
+  geom_line(aes(color = Geography)) +
+  geom_point(aes(color = Geography)) + 
+  facet_wrap(~Category.x) +
+  theme(legend.position = "bottom") +
+  ggtitle("Linegraph of Obesity Prevalence over Years in Females, Males, and Both Females and Males") +
+  xlab("Year") + ylab("Obesity Prevalence")
+```
+
+Among the five largest economies in the world, the USA is the country that has the highest percentage of obesity population, and Japan the lowest percentage of obesity population. 
+
+Next, we want to compare countries of G7 with countries not in G7.
+
+First, we create a column of G7 or not.
+
+```{r fig.width=10}
+df <- df %>% mutate(g7_or_not = case_when(Geography == "United Kingdom" ~ "G7",
+                                          Geography == "USA" ~ "G7",
+                                          Geography == "Canada" ~ "G7",
+                                          Geography == "France" ~ "G7",
+                                          Geography == "Germany" ~ "G7",
+                                          Geography == "Japan" ~ "G7",
+                                          Geography == "Italy" ~ "G7",
+                                          Geography == "G7" ~ "G7",
+                                          TRUE ~ "NotG7" # TRUE means else.
+  ))
+```
+
+We want to have a look at the new dataframe by using glimpse function.
+
+```{r}
+glimpse(df)
+```
+
+We create a boxplot to compare the percentage of obesity population in G7 countries and in the countries not in G7.
+
+```{r}
+df %>% select(g7_or_not, obesity_percentage, year, Category.x) %>%
+  ggplot(aes(x = g7_or_not, y = obesity_percentage)) +
+  geom_boxplot(fill="yellow") +
+  theme(legend.position = "bottom") +
+  ggtitle("Boxplot of Obesity Prevalence in G7 Countries and not_G7 Countries") +
+  xlab("G7 and Not_G7") + ylab("Obesity Prevalence")
+```
+
+The median value of obesity prevalence in G7 countries is higher than in the countries not in G7.
+
+The percentage of obesity population in the G7 countries is more local at about 23% to 42%, while the percentage of obesity population in the countries not in G7 is spreading out from 2-3% to 45-47%. It means that the economy condition is not the only factor that affects the development of obesity in some countries or regions if BIM is a reliable indicator of obesity.
+
+Let's create a density graph of percentage of obesity population in G7 countries and not in G7 countries.
+
+```{r fig.width=8}
+df %>% ggplot(aes(x = obesity_percentage, fill = g7_or_not)) + 
+  geom_density(alpha = 0.5) +
+  ggtitle("Density of Obesity Prevalence in G7 Countries and not_G7 Countries") +
+  xlab("Obesity Prevalence") + ylab("Density")
+```
+
+The curve represents the probability density function of obesity prevalence. It is not a normal distribution in both G7 countries and not in G7 countries. There are two peaks in both the curve of G7 countries and the curve of not in G7 countries, implying that there are countries or regions that have a low percentage of population with obesity and there are also countries or regions that have a high percentage of population with obesity in both G7 countries and not in G7 countries. Thus, being in G7 or not is not enough for a country to have a high percentage of population with obesity.
+
+
+## Summary
+
+There is a positive correlation between obesity prevalence and the daily calories intake everywhere in the world, in both males and females.
+
+The whole world is eating more and the percentage of population with obesity is increasing. However, there is some countries or regions where the percentage of population with obesity is not increasing even though they are eating more.
+
+Eating a large amount of calories everyday is a risk factor of the development of obesity. However, it is not the only one.
+
+The prevalence of obesity is higher in the developed countries than the developing countries. The advanced economy condition is considered a risk factor of obesity.
+
+Females are more likely to have obesity than males everywhere in the world. However, the differences between the obesity prevalence of female and males in the developing countries are much larger than in the developed countries.
+
+BMI is not a good indicator for obesity in some regions like Samoa.
+
+Obesity is still more prevalent in the developed countries than in the developing countries. This trend has not changed over the past 9 years from 2015 to 2023. If the change is occurring like prediction, it has just started and has not been expressed in these datasets.
